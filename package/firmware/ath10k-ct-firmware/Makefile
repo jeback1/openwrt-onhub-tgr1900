@@ -30,17 +30,17 @@ define Download/ct-firmware-htt
   URL_FILE:=$($(1)_FIRMWARE_FILE_CT_HTT)
 endef
 
-QCA988X_FIRMWARE_FILE_CT:=firmware-2-ct-full-community.bin
+QCA988X_FIRMWARE_FILE_CT:=firmware-2-ct-full-community-22.bin.lede.022
 define Download/ath10k-firmware-qca988x-ct
-  $(call Download/ct-firmware,QCA988X,ath10k-fw-beta)
-  HASH:=0723e73558e7187f099219bc5de2152336f27c40aa8ca6f2ed7e4f7cbd6049bd
+  $(call Download/ct-firmware,QCA988X,)
+  HASH:=398e4380e7e55105f3da0f78af29d1e437404ed3a82597aa4b6daaa7dce1a38e
 endef
 $(eval $(call Download,ath10k-firmware-qca988x-ct))
 
-QCA988X_FIRMWARE_FILE_CT_FULL_HTT:=firmware-2-ct-full-htt-mgt-community.bin
+QCA988X_FIRMWARE_FILE_CT_FULL_HTT:=firmware-2-ct-full-htt-mgt-community-22.bin.lede.022
 define Download/ath10k-firmware-qca988x-ct-full-htt
-  $(call Download/ct-firmware-full-htt,QCA988X,ath10k-fw-beta)
-  HASH:=256cc450c02494e450fea9463be1289e3b46fcb5d8ce02a0c97fc86d15703b25
+  $(call Download/ct-firmware-full-htt,QCA988X,)
+  HASH:=990d9cbf79dd81f141257a289f89808bd7726406c9ed845a7e49e5167002ffde
 endef
 $(eval $(call Download,ath10k-firmware-qca988x-ct-full-htt))
 
