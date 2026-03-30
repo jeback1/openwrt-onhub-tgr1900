@@ -1,0 +1,13 @@
+#!/bin/sh /etc/rc.common
+# OnHub conduit fix: force both WAN + LAN1 to use eth0
+# Ensures board.json is corrected every boot before network starts
+
+START=08   # run early, before network init
+STOP=89
+
+start() {
+    logger -t onhub-fix "Patching board.json conduits (wan, lan1 -> eth0)"
+    if [ -f /etc/board.json ]; then
+        sed -i 's/"conduit": "eth1"/"conduit": "eth0"/g' /etc/board.json
+    fi
+}
