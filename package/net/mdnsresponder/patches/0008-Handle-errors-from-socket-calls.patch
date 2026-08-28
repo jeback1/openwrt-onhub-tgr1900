@@ -1,0 +1,35 @@
+From ed58146d3aeecdb9920fdc017f85c18b5b10f2db Mon Sep 17 00:00:00 2001
+From: Nate Karstens <nate.karstens@garmin.com>
+Date: Thu, 10 Aug 2017 08:27:32 -0500
+Subject: [PATCH 8/8] Handle errors from socket calls
+
+Adds handling for socket() or read() returning a
+negative value (indicating an error has occurred).
+
+Upstream-Status: Submitted [dts@apple.com]
+
+Signed-off-by: Nate Karstens <nate.karstens@garmin.com>
+Signed-off-by: Alex Kiernan <alex.kiernan@gmail.com>
+
+Rebased onto mDNSResponder-2881.120.11: the netlink read()-loop this
+patch hardened in ProcessRoutingNotification() was replaced upstream
+by a recv(..., MSG_TRUNC) implementation that already has its own
+error handling (see the `readCount < 0`/`readCount > sizeof(buff)`
+checks near the top of the current ProcessRoutingNotification). Only
+the second half of this patch -- the mDNSPlatformInit_CanReceiveUnicast
+socket() check, a different function untouched by that rewrite --
+still applies and is still needed.
+---
+ mDNSPosix/mDNSPosix.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/mDNSPosix/mDNSPosix.c
++++ b/mDNSPosix/mDNSPosix.c
+@@ -1930,6 +1930,7 @@ mDNSlocal mDNSBool mDNSPlatformInit_CanReceiveUnicast(void)
+     int err;
+     int s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+     struct sockaddr_in s5353;
++    if (s < 0) return mDNSfalse;
+     s5353.sin_family      = AF_INET;
+     s5353.sin_port        = MulticastDNSPort.NotAnInteger;
+     s5353.sin_addr.s_addr = 0;

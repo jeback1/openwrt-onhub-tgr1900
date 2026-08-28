@@ -1,0 +1,26 @@
+From: OpenWrt
+Subject: [PATCH] uds_daemon: guard AWDL reference out of POSIX builds
+
+`resolve_result_callback()` unconditionally references `req->resolve_awdl`
+and `AWDLInterfaceID`, neither of which exist anywhere in this open-source
+tree -- AWDL (Apple Wireless Direct Link) is a macOS/iOS-only proximity
+networking feature with no POSIX/Linux equivalent, and its real
+implementation lives in Apple's closed-source internal headers, not in
+this distribution. `is_split_awdl_query` is only ever used as a boolean
+parameter to two structured-logging calls (UDS_LOG_ANSWER_EVENT), not for
+any functional control flow, so on POSIX it's simply always false.
+
+Upstream-Status: Inactive-Upstream [POSIX-specific fix]
+
+--- a/mDNSShared/uds_daemon.c
++++ b/mDNSShared/uds_daemon.c
+@@ -3626,7 +3626,11 @@ mDNSlocal void resolve_result_callback(mDNS *const m, DNSQuestion *question, c
+     request_state *const req = question->QuestionContext;
+     const mDNSu32 name_hash = mDNS_DomainNameFNV1aHash(&question->qname);
+     const mDNSBool isMDNSQuestion = mDNSOpaque16IsZero(question->TargetQID);
++#ifdef POSIX_BUILD
++    const mDNSBool is_split_awdl_query = mDNSfalse; // AWDL does not exist on POSIX
++#else
+     const mDNSBool is_split_awdl_query = (req->resolve_awdl && question->InterfaceID == AWDLInterfaceID);
++#endif
+     UDS_LOG_ANSWER_EVENT(isMDNSQuestion ? MDNS_LOG_CATEGORY_MDNS : MDNS_LOG_CATEGORY_DEFAULT, MDNS_LOG_DEFAULT,
