@@ -1,0 +1,80 @@
+#!/bin/sh
+# duo-ap OTBR: watchdog for the WDS station uplink that carries the OTBR
+# backbone (services VLAN). If the AP end of the link silently stops
+# delivering frames to us (seen 2026-10-05: the server AP's ath10k firmware
+# crashed and recovered, but the WDS peer never came back), our side still
+# hears beacons and never disconnects. This pings a host on the far side of
+# the link and restarts the station's radio after repeated failures.
+#
+# Usage: uplink-watchdog <network> <ping target> <interval s> <max failures> <holdoff s>
+
+. /lib/functions.sh
+. /lib/functions/network.sh
+
+NETWORK="$1"
+TARGET="$2"
+INTERVAL="$3"
+MAX_FAILS="$4"
+HOLDOFF="$5"
+
+log() {
+	logger -t uplink-watchdog -p daemon.notice "$*"
+}
+
+# Find the UCI wifi-device of the enabled station interface on $NETWORK.
+# Looked up each time rather than cached: the phyN names can change across
+# boots, the radioN UCI names don't.
+find_radio_cb() {
+	local mode network disabled device
+	config_get mode "$1" mode
+	config_get network "$1" network
+	config_get_bool disabled "$1" disabled 0
+	config_get device "$1" device
+	[ "$mode" = sta ] && [ "$disabled" = 0 ] && list_contains network "$NETWORK" && \
+		RADIO="$device"
+}
+
+find_radio() {
+	RADIO=
+	config_load wireless
+	config_foreach find_radio_cb wifi-iface
+}
+
+find_radio
+if [ -z "$RADIO" ]; then
+	log "no enabled station interface on network '$NETWORK', exiting"
+	exit 0
+fi
+
+log "watching $NETWORK uplink ($RADIO) via ping to $TARGET, every ${INTERVAL}s, act after $MAX_FAILS failures"
+
+# Let the uplink associate after boot before judging it.
+sleep "$HOLDOFF"
+
+fails=0
+while true; do
+	network_flush_cache
+	network_get_device DEV "$NETWORK"
+	if [ -n "$DEV" ] && ping -6 -c 2 -W 2 -I "$DEV" "$TARGET" >/dev/null 2>&1; then
+		[ "$fails" -ge 2 ] && log "uplink reachable again after $fails failed checks"
+		fails=0
+		sleep "$INTERVAL"
+		continue
+	fi
+
+	fails=$((fails + 1))
+	if [ "$fails" -lt "$MAX_FAILS" ]; then
+		sleep "$INTERVAL"
+		continue
+	fi
+
+	find_radio
+	if [ -z "$RADIO" ]; then
+		log "no enabled station interface on network '$NETWORK' any more, exiting"
+		exit 0
+	fi
+	log "$TARGET unreachable via ${DEV:-$NETWORK} for $fails checks, restarting $RADIO"
+	wifi up "$RADIO"
+	fails=0
+	sleep "$HOLDOFF"
+done
