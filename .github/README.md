@@ -91,7 +91,7 @@ stable build 022 (`firmware-2-ct-full-community-22.bin.lede.022`). With it, iper
 
 A bridging AP needs `net.ipv6.conf.*.forwarding=1`, and with forwarding on, the kernel
 ignores router advertisements unless `accept_ra` is 2. On the interface the border router
-uses as its backbone (here the `services` network, `br-lan.5`), that means no on-link
+uses as its backbone (in my case `br-lan.5`), that means no on-link
 prefix or SLAAC address, and hosts on the LAN can't reach the Thread network. A hotplug
 script sets `accept_ra=2` when that interface comes up.
 
@@ -118,7 +118,8 @@ under `package/net/`, so `./scripts/feeds update` doesn't wipe the changes. See
 
 ### 5. Uplink watchdog (`otbr`)
 
-If the AP at the far end of a WDS link has its firmware crash and recover, the 4-address
+In my use case, the AP running otbr was connected to the network via a WDS link. If the AP
+at the far end of a WDS link has its firmware crash and recover, the 4-address
 peer may never come back while both sides still look associated. The OTBR's backbone link
 then stays dead until the next group rekey (24 h by default). `uplink-watchdog` pings a host
 on the far side every 30 s. After 4 failures in a row it restarts the radio carrying the
