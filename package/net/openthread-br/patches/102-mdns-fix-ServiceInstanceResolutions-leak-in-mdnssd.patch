@@ -1,0 +1,103 @@
+From 1d6a760bbf69 Mon Sep 17 00:00:00 2001
+From: "Matthew P. Tilchen" <matt@tilchen.net>
+Date: Thu, 21 Aug 2025 13:35:19 -0400
+Subject: [PATCH] [mdns] fix ServiceInstanceResolutions leak in mdnssd (#3003)
+
+Backport of upstream ot-br-posix commit 1d6a760bbf69 to 2f3c799c74.
+Upstream's mResolvingInstances holds shared_ptr since #2971; here it is
+still unique_ptr, so the find_if lambda takes a unique_ptr. The added
+code is otherwise identical.
+
+--- a/src/mdns/mdns_mdnssd.cpp	2025-06-12 09:02:54.000000000 -0400
++++ b/src/mdns/mdns_mdnssd.cpp	2026-10-20 19:49:10.925880825 -0400
+@@ -50,6 +50,7 @@
+ #include "common/dns_utils.hpp"
+ #include "common/logging.hpp"
+ #include "common/time.hpp"
++#include "utils/string_utils.hpp"
+ 
+ namespace otbr {
+ 
+@@ -1117,6 +1118,7 @@
+     else
+     {
+         mPublisher.OnServiceRemoved(aInterfaceIndex, mType, aInstanceName);
++        Remove(aInterfaceIndex, aInstanceName, aType, aDomain);
+     }
+ 
+ exit:
+@@ -1132,11 +1134,33 @@
+                                                    const std::string &aType,
+                                                    const std::string &aDomain)
+ {
++    Remove(aInterfaceIndex, aInstanceName, aType, aDomain);
++
+     mResolvingInstances.push_back(
+         MakeUnique<ServiceInstanceResolution>(*this, aInstanceName, aType, aDomain, aInterfaceIndex));
+     mResolvingInstances.back()->Resolve();
+ }
+ 
++void PublisherMDnsSd::ServiceSubscription::Remove(uint32_t           aInterfaceIndex,
++                                                  const std::string &aInstanceName,
++                                                  const std::string &aType,
++                                                  const std::string &aDomain)
++{
++    otbrLogDebug("Removing service instance resolution for %s %s inf %u ", aInstanceName.c_str(), aType.c_str(),
++                 aInterfaceIndex);
++
++    const auto it = std::find_if(mResolvingInstances.begin(), mResolvingInstances.end(),
++                                 [aInterfaceIndex, &aInstanceName, &aType,
++                                  &aDomain](const std::unique_ptr<ServiceInstanceResolution> &aServiceResolution) {
++                                     return aServiceResolution->Matches(aInterfaceIndex, aInstanceName, aType, aDomain);
++                                 });
++
++    if (it != mResolvingInstances.end())
++    {
++        mResolvingInstances.erase(it);
++    }
++}
++
+ void PublisherMDnsSd::ServiceSubscription::UpdateAll(MainloopContext &aMainloop) const
+ {
+     Update(aMainloop);
+@@ -1158,6 +1182,16 @@
+     }
+ }
+ 
++bool PublisherMDnsSd::ServiceInstanceResolution::Matches(uint32_t           aInterfaceIndex,
++                                                         const std::string &aInstanceName,
++                                                         const std::string &aType,
++                                                         const std::string &aDomain) const
++{
++    return (mNetifIndex == aInterfaceIndex) && otbr::StringUtils::EqualCaseInsensitive(mInstanceName, aInstanceName) &&
++           otbr::StringUtils::EqualCaseInsensitive(mType, aType) &&
++           otbr::StringUtils::EqualCaseInsensitive(mDomain, aDomain);
++}
++
+ void PublisherMDnsSd::ServiceInstanceResolution::Resolve(void)
+ {
+     assert(mServiceRef == nullptr);
+--- a/src/mdns/mdns_mdnssd.hpp	2025-06-12 09:02:54.000000000 -0400
++++ b/src/mdns/mdns_mdnssd.hpp	2026-10-20 19:49:10.926154343 -0400
+@@ -226,6 +226,10 @@
+         {
+         }
+ 
++        bool      Matches(uint32_t           aInterfaceIndex,
++                          const std::string &aInstanceName,
++                          const std::string &aType,
++                          const std::string &aDomain) const;
+         void      Resolve(void);
+         otbrError GetAddrInfo(uint32_t aInterfaceIndex);
+         void      FinishResolution(void);
+@@ -287,6 +291,10 @@
+                      const std::string &aInstanceName,
+                      const std::string &aType,
+                      const std::string &aDomain);
++        void Remove(uint32_t           aNetifIndex,
++                    const std::string &aInstanceName,
++                    const std::string &aType,
++                    const std::string &aDomain);
+         void UpdateAll(MainloopContext &aMainloop) const;
+         void ProcessAll(const MainloopContext &aMainloop, std::vector<DNSServiceRef> &aReadyServices) const;
+ 
