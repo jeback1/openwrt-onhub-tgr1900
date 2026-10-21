@@ -47,7 +47,7 @@ by this README. Each import is tagged `base/<version>`, and newer releases are m
 |---|---|---|
 | `ap` | Bridged access point | Fixes 1–3, LuCI, tcpdump |
 | `ap-diag` | AP with diagnostics tools | `ap` + iperf3, ethtool, sysstat, mosquitto-client-ssl, tmux, lua |
-| `otbr` | AP + OpenThread Border Router | Fixes 1–3, OTBR, fixes 4–6, LuCI, tcpdump, strace, lsof, mosquitto-client-ssl, tmux |
+| `otbr` | AP + OpenThread Border Router | Fixes 1–3, OTBR, fixes 4–6, LuCI, tcpdump, strace, lsof, mosquitto-client-ssl, tmux, lua |
 
 Each branch carries its own `.config`.
 
