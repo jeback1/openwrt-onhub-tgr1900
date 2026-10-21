@@ -11,13 +11,14 @@ optionally with an OpenThread Border Router (OTBR).
 > them work for an AP, but it's expected to break routing between them, and these images
 > haven't been tested as a router.
 
-Stock OpenWrt 25.12 boots on the TGR1900 but has two problems that make it a poor AP:
+Stock OpenWrt 25.12 boots on the TGR1900 but has several problems that make it a poor AP:
 
 - **The two Ethernet ports can't be bridged.** An AP puts both ports into one bridge. With
   stock 25.12, the LAN port then can't reach the AP or anything behind it, because DSA puts
   each port on a different CPU port of the switch, and that combination is broken on the
   IPQ8064 ([openwrt#17891](https://github.com/openwrt/openwrt/issues/17891)). This repo
   works around it by running both ports through one CPU port.
+- On some units, all three radios fail to load their calibration data.
 - The 5 GHz radio's throughput collapses to about 70 Mbps.
 
 This repo carries the fixes, plus a few for the OTBR role.
@@ -33,7 +34,8 @@ This isn't an official OpenWrt project. The fixes have been running on a small h
   - `pcie0`: QCA9882 2.4 GHz 1×1
   - `pcie1`: QCA9880 5 GHz 3×3, the main AP radio
   - `pcie2`: QCA9882 2.4/5 GHz 1×1
-- Bootloader: ChromeOS depthcharge; the radio calibration data lives in the ChromeOS VPD
+- Bootloader: ChromeOS depthcharge, which passes the radio calibration data in the ChromeOS
+  VPD and in the device tree
 
 ## Branches
 
@@ -43,9 +45,9 @@ by this README. Each import is tagged `base/<version>`, and newer releases are m
 
 | Branch | Role | Adds |
 |---|---|---|
-| `ap` | Bridged access point | Fixes 1–2, LuCI, tcpdump |
+| `ap` | Bridged access point | Fixes 1–3, LuCI, tcpdump |
 | `ap-diag` | AP with diagnostics tools | `ap` + iperf3, ethtool, sysstat, mosquitto-client-ssl, tmux, lua |
-| `otbr` | AP + OpenThread Border Router | Fixes 1–2, OTBR, fixes 3–5, LuCI, tcpdump, strace, lsof, mosquitto-client-ssl, tmux |
+| `otbr` | AP + OpenThread Border Router | Fixes 1–3, OTBR, fixes 4–6, LuCI, tcpdump, strace, lsof, mosquitto-client-ssl, tmux |
 
 Each branch carries its own `.config`.
 
@@ -78,7 +80,26 @@ images are for AP use only (see the warning at the top).
 
 *File:* `target/linux/ipq806x/base-files/etc/init.d/fixboard`
 
-### 2. 5 GHz throughput stuck around 70 Mbps
+### 2. Radio calibration data on units without VPD
+
+Since 25.12.0, the `11-ath10k-caldata` firmware hotplug script reads each radio's
+calibration data from the ChromeOS VPD (`/sys/firmware/vpd/ro/wifi_base64_calibration{0,1,2}`,
+provided by `kmod-google-firmware`). Whether Linux gets the VPD depends on the unit's
+ChromeOS firmware. On my units, the ones updated to the January 2016 firmware (romstage
+`coreboot-c4d26d6`) pass it, and the one still on the original May 2015 firmware (romstage
+`coreboot-9958ccb`) doesn't: the modules load, but `/sys/firmware/vpd` doesn't exist, and
+all three radios fail with `failed to run otp: -22 (download-cal-data)`. Depthcharge also
+passes the same data in the device tree, so the script now uses the VPD when it's there and
+the device-tree copy otherwise. `grep romstage /sys/firmware/log` shows which firmware a
+unit runs.
+
+To check, `dmesg | grep -E 'ath10k_pci .*(htt-ver|cal)'` should show `cal file` for each
+radio. `otp calibration failed: 2` on its own is expected: the chips have no OTP calibration
+fuses, so they use the data the script supplies.
+
+*File:* `target/linux/ipq806x/base-files/etc/hotplug.d/firmware/11-ath10k-caldata`
+
+### 3. 5 GHz throughput stuck around 70 Mbps
 
 The ath10k-ct beta firmware (build 023) for QCA988X has a rate-control regression: the rate
 stays at MCS 3, one spatial stream, even right next to the AP. This pins QCA988X to the
@@ -87,7 +108,7 @@ stable build 022 (`firmware-2-ct-full-community-22.bin.lede.022`). With it, iper
 
 *File:* `package/firmware/ath10k-ct-firmware/Makefile`
 
-### 3. accept_ra on the services interface (`otbr`)
+### 4. accept_ra on the services interface (`otbr`)
 
 A bridging AP needs `net.ipv6.conf.*.forwarding=1`, and with forwarding on, the kernel
 ignores router advertisements unless `accept_ra` is 2. On the interface the border router
@@ -98,7 +119,7 @@ script sets `accept_ra=2` when that interface comes up.
 *File:* `target/linux/ipq806x/base-files/etc/hotplug.d/iface/95-services-accept-ra`
 (the interface name is site-specific; adjust it to yours)
 
-### 4. otbr-agent leaks file descriptors until it crashes (`otbr`)
+### 5. otbr-agent leaks file descriptors until it crashes (`otbr`)
 
 `otbr-agent` crashed every few days with `otPlatInfraIfHasAddress() ... No file
 descriptors available`. Each time mDNS reported a service instance again, otbr-agent's
@@ -126,7 +147,7 @@ reply there explains the actual design.
 under `package/net/`, so `./scripts/feeds update` doesn't wipe the changes. See
 [Building](#building) for the catch.
 
-### 5. Uplink watchdog (`otbr`)
+### 6. Uplink watchdog (`otbr`)
 
 In my use case, the AP running otbr was connected to the network via a WDS link. If the AP
 at the far end of a WDS link has its firmware crash and recover, the 4-address
@@ -149,17 +170,6 @@ the same way.
 
 *Files:* `target/linux/ipq806x/base-files/usr/sbin/uplink-watchdog`,
 `target/linux/ipq806x/base-files/etc/init.d/uplink-watchdog`
-
-### Radio calibration data (no fix needed)
-
-Earlier versions of this repo patched the `11-ath10k-caldata` firmware hotplug script. That
-isn't needed any more. Since 25.12.0 the stock script reads each radio's calibration data
-from the ChromeOS VPD (`/sys/firmware/vpd/ro/wifi_base64_calibration{0,1,2}`, provided by
-`kmod-google-firmware`). On v25.12.6, all three radios loaded it on two units across several
-reboots. To check, `dmesg | grep 'ath10k_pci .*cal'` should show `cal file` for each radio.
-
-`ath10k_pci ...: otp calibration failed: 2` in `dmesg` is expected: the chips have no OTP
-calibration fuses, so they use the data the script supplies.
 
 ## AP configuration notes
 
