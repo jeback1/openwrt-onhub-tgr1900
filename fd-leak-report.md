@@ -1,3 +1,14 @@
+> **Superseded.** Submitted as
+> [openthread/ot-br-posix#3649](https://github.com/openthread/ot-br-posix/issues/3649).
+> The maintainer replied that this leak was already fixed upstream in
+> [#3003](https://github.com/openthread/ot-br-posix/pull/3003) (1d6a760bbf69, August 2025),
+> after the commit OpenWrt pins. They also explained that `FinishResolution()` keeps the
+> resolution and its `DNSServiceGetAddrInfo` reference alive on purpose, so that addresses
+> arriving later and later address changes still get delivered, and that callers already
+> deduplicate `SubscribeHost()` calls. The root-cause analysis and the patch below are
+> wrong on those points. This repo now carries a backport of #3003 instead. The report
+> is kept for the record.
+
 # Report to openthread/ot-br-posix regarding an otbr-agent fd leak
 
 ## Subject: `ServiceInstanceResolution` never released in `mdns_mdnssd.cpp` — otbr-agent leaks one `mdnsd` connection per browsed interface on every mDNS re-discovery of an already-resolved instance
