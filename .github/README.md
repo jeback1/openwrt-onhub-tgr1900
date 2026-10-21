@@ -192,19 +192,29 @@ git clone -b ap https://github.com/jeback1/openwrt-onhub-tgr1900.git   # or ap-d
 cd openwrt-onhub-tgr1900
 ./scripts/feeds update -a
 ./scripts/feeds install -a
+# otbr only: drop the feed copies that clash with the in-tree ones
+rm -f package/feeds/packages/mdnsresponder package/feeds/packages/openthread-br
+git checkout .config
 make defconfig
+git status --short    # should print nothing
 make -j$(($(nproc)+1))
 ```
 
-The image is `bin/targets/ipq806x/chromium/openwrt-ipq806x-chromium-tplink_onhub-squashfs-factory.bin`.
+The images are in `bin/targets/ipq806x/chromium/`:
+`openwrt-<version>-ipq806x-chromium-tplink_onhub-squashfs-factory.bin` for a first install,
+`...-squashfs-sysupgrade.bin` for upgrades.
+
+**Why `git checkout .config`:** `.config` is tracked, and `./scripts/feeds update` runs
+`make defconfig` on it before any feed package is installed. In a fresh clone that drops
+every package that comes from a feed (LuCI, and on `ap-diag`/`otbr` the extra tools), and
+they don't come back after `feeds install`. Restoring `.config` before `make defconfig`
+avoids that.
 
 **On `otbr`:** `./scripts/feeds install -a` recreates the
 `package/feeds/packages/mdnsresponder` and `package/feeds/packages/openthread-br` symlinks,
-which clash with the in-tree copies. Remove them before building:
-
-```sh
-rm -f package/feeds/packages/mdnsresponder package/feeds/packages/openthread-br
-```
+which clash with the in-tree copies under `package/net/`; that's what the `rm` is for. If
+you switch an existing checkout from `otbr` to `ap` or `ap-diag`, put them back with
+`./scripts/feeds install mdnsresponder openthread-br luci-app-openthread`.
 
 **`.config` hygiene.** The configs started from the official `config.buildinfo`, which sets
 `CONFIG_BUILDBOT=y`. That makes `ALL_NONSHARED` (and through it `ALL_KMODS`) default to
