@@ -101,16 +101,26 @@ script sets `accept_ra=2` when that interface comes up.
 ### 4. otbr-agent leaks file descriptors until it crashes (`otbr`)
 
 `otbr-agent` crashed every few days with `otPlatInfraIfHasAddress() ... No file
-descriptors available`. In ot-br-posix's `src/mdns/mdns_mdnssd.cpp`,
-`ServiceInstanceResolution::FinishResolution()` never removed itself from
-`mResolvingInstances`, so its `DNSServiceGetAddrInfo` connection to `mdnsd` was never
-closed. With only one border router on the network, its TREL browse rediscovers itself
-every 6–7 minutes, and each time it leaks one connection per browsed interface.
+descriptors available`. Each time mDNS reported a service instance again, otbr-agent's
+mDNSResponder backend (`src/mdns/mdns_mdnssd.cpp`) started a new resolution without
+dropping the previous one, so the old resolution's `DNSServiceGetAddrInfo` connection to
+`mdnsd` was never closed. In my case the trigger was the border router's TREL browse
+rediscovering its own `_trel._udp` service, which leaked one connection per browsed
+interface each time.
 
-The fix is `package/net/openthread-br/patches/102-fix-mdns-resolving-instance-fd-leak.patch`.
-After it, fd counts stayed flat for 25+ hours. The full analysis, written as a report for
-ot-br-posix (not submitted yet), is in [`fd-leak-report.md`](https://github.com/jeback1/openwrt-onhub-tgr1900/blob/otbr/fd-leak-report.md) on the
-`otbr` branch.
+This was fixed upstream in ot-br-posix [#3003](https://github.com/openthread/ot-br-posix/pull/3003)
+(August 2025), after the 2025-06-12 commit that OpenWrt 25.12 builds.
+`package/net/openthread-br/patches/102-mdns-fix-ServiceInstanceResolutions-leak-in-mdnssd.patch`
+backports it. To test it, a `_trel._udp` service was announced and withdrawn 10 times from
+another host: otbr-agent saw 30 adds and 30 removes across its three interfaces, and its fd
+count didn't change.
+
+Earlier versions of this repo carried my own patch instead. It stopped the leak but also
+cut off later address updates for resolved services. My report,
+[`fd-leak-report.md`](https://github.com/jeback1/openwrt-onhub-tgr1900/blob/otbr/fd-leak-report.md)
+on the `otbr` branch, was submitted as
+[ot-br-posix#3649](https://github.com/openthread/ot-br-posix/issues/3649); the maintainer's
+reply there explains the actual design.
 
 `openthread-br` and `mdnsresponder` (bumped to 2881.120.11) are kept as in-tree packages
 under `package/net/`, so `./scripts/feeds update` doesn't wipe the changes. See
