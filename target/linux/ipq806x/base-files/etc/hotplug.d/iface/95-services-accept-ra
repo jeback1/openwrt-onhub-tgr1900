@@ -1,5 +1,5 @@
 #!/bin/sh
-# duo-ap OTBR: accept_ra is silently ignored on the services interface once
+# OTBR: accept_ra is silently ignored on the services interface once
 # forwarding=1 is set, unless explicitly re-enabled here. Without this, HA
 # never learns the on-link route for the services VLAN and can't reach the
 # Thread border router. See the README, "accept_ra on the services interface".
