@@ -1,5 +1,5 @@
 #!/bin/sh
-# duo-ap OTBR: watchdog for the WDS station uplink that carries the OTBR
+# OTBR: watchdog for the WDS station uplink that carries the OTBR
 # backbone (services VLAN). If the AP end of the link silently stops
 # delivering frames to us (seen 2026-10-05: the server AP's ath10k firmware
 # crashed and recovered, but the WDS peer never came back), our side still

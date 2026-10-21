@@ -1,5 +1,5 @@
 #!/bin/sh /etc/rc.common
-# duo-ap OTBR: restart the services WDS uplink if the far side stops
+# OTBR: restart the services WDS uplink if the far side stops
 # answering. See /usr/sbin/uplink-watchdog.
 #
 # The ping target is site-specific and has no default; the service doesn't
