@@ -25,12 +25,25 @@ base64_extract() {
 	fi
 }
 
+# OnHub: depthcharge passes the calibration data both in the ChromeOS VPD
+# and in the device tree. Some units expose no VPD to Linux, so fall back
+# to the device tree copy.
+onhub_base64_extract() {
+	local vpd="/sys/firmware/vpd/ro/wifi_base64_calibration$1"
+
+	if [ -e "$vpd" ]; then
+		base64_extract "$vpd"
+	else
+		base64_extract "/sys/firmware/devicetree/base/soc/pci@$2/pcie@0/ath10k@0,0/qcom,ath10k-calibration-data-base64"
+	fi
+}
+
 case "$FIRMWARE" in
 "ath10k/cal-pci-0000:01:00.0.bin")
 	case "$board" in
 	asus,onhub|\
 	tplink,onhub)
-		base64_extract /sys/firmware/vpd/ro/wifi_base64_calibration0
+		onhub_base64_extract 0 1b500000
 		;;
 	meraki,mr52)
 		CI_UBIPART=art
@@ -61,7 +74,7 @@ case "$FIRMWARE" in
 	case "$board" in
 	asus,onhub|\
 	tplink,onhub)
-		base64_extract /sys/firmware/vpd/ro/wifi_base64_calibration1
+		onhub_base64_extract 1 1b700000
 		;;
 	esac
 	;;
@@ -92,7 +105,7 @@ case "$FIRMWARE" in
 	case "$board" in
 	asus,onhub|\
 	tplink,onhub)
-		base64_extract /sys/firmware/vpd/ro/wifi_base64_calibration2
+		onhub_base64_extract 2 1b900000
 		;;
 	meraki,mr42)
 		CI_UBIPART=art
